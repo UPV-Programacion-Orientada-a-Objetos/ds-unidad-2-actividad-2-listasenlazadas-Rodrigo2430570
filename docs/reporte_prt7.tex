@@ -1,0 +1,116 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\geometry{margin=2.5cm}
+\setlist[itemize]{topsep=2pt,itemsep=2pt,parsep=0pt,partopsep=0pt}
+\titleformat{\section}{\large\bfseries}{}{0pt}{}
+\titleformat{\subsection}{\normalsize\bfseries}{}{0pt}{}
+
+\title{Caso de Estudio: Decodificador de Protocolo Industrial (PRT-7)\\Reporte}
+\author{Rodrigo Damian Alvarez Aguilar\\Universidad Politécnica de Victoria\\Ingeniería en Tecnologías de la Información e Innovación Digital}
+\date{6 de noviembre de 2025}
+
+\begin{document}
+\maketitle
+
+\section{Introducción}
+Este proyecto implementa un decodificador simple del protocolo PRT-7 usando C++ y un Arduino real.
+El Arduino no envía el mensaje final, sino instrucciones para construirlo:
+\begin{itemize}
+  \item Tramas \textbf{LOAD} (\texttt{L,X}): traen un carácter. Se decodifica con un ``rotor'' y se agrega al final del mensaje.
+  \item Tramas \textbf{MAP} (\texttt{M,N}): rotan el rotor \emph{N} posiciones (positivas o negativas), cambiando el mapeo de letras de forma dinámica.
+\end{itemize}
+
+El objetivo es leer las líneas por el puerto serie, aplicar la lógica de mapeo y armar el mensaje con el orden correcto, sin usar estructuras de la STL.
+
+\section{Manual técnico}
+\subsection{Diseño}
+\subsubsection*{Arquitectura general}
+El programa tiene tres partes:
+\begin{itemize}
+  \item \textbf{Lectura serie} (Win32): abre el puerto \texttt{\\.\\COMx}, configura el baud rate y lee líneas terminadas en \texttt{\verb|\n|}.
+  \item \textbf{POO de tramas}: una clase base y dos derivadas para procesar cada línea.
+  \item \textbf{Estructuras de datos manuales}: una lista doble para el mensaje y una lista circular doble para el rotor A--Z.
+\end{itemize}
+
+\subsubsection*{Clases principales}
+\begin{itemize}
+  \item \textbf{TramaBase}: clase abstracta con el método \texttt{procesar(...)} y destructor virtual.
+  \item \textbf{TramaLoad}: guarda un carácter y, al procesar, pide al rotor su mapeo y lo inserta al final de la lista del mensaje.
+  \item \textbf{TramaMap}: guarda un entero. Al procesar, rota el rotor esa cantidad de pasos.
+  \item \textbf{ListaDeCarga} (lista doble): guarda los caracteres decodificados en orden. Métodos: \texttt{insertarAlFinal}, \texttt{imprimirMensaje}, \texttt{imprimirMensajeBrackets}.
+  \item \textbf{RotorDeMapeo} (lista circular doble): contiene 26 nodos con letras \texttt{'A'..'Z'}. Mantiene un puntero \emph{head} que indica la ``posición cero''. Métodos: \texttt{rotar(int)}, \texttt{getMapeo(char)}.
+  \item \textbf{SerialPort}: envoltorio mínimo de Win32 para abrir, configurar y leer del puerto serie.
+\end{itemize}
+
+\subsubsection*{Lógica del rotor}
+\begin{itemize}
+  \item La lista se arma una vez con las letras A--Z y se cierra en círculo.
+  \item Al inicio, \texttt{head} apunta a 'A' (\texttt{'A'\,$\to$\,'A'}).
+  \item Al rotar +\emph{N}, \texttt{head} avanza \emph{N} posiciones. Al rotar --\emph{N}, \texttt{head} retrocede.
+  \item Para mapear un carácter de entrada \texttt{in} (A--Z), se toma el desplazamiento \texttt{in - 'A'} y se devuelve la letra que está en \texttt{head + desplazamiento} (módulo 26). Otros caracteres (como espacio) se devuelven igual.
+\end{itemize}
+
+\subsection{Desarrollo}
+\subsubsection*{Código fuente y organización}
+\begin{itemize}
+  \item Encabezados: \texttt{include/listas.h}, \texttt{include/tramas.h}, \texttt{include/serial.h}
+  \item Fuentes: \texttt{src/listas.cpp}, \texttt{src/tramas.cpp}, \texttt{src/serial\\_win32.cpp}, \texttt{src/main.cpp}
+  \item Construcción: \texttt{CMakeLists.txt} (genera con ``MinGW Makefiles'').
+  \item Documentación: \texttt{Doxyfile} (genera HTML en \texttt{docs/html}).
+  \item Arduino: \texttt{arduino/prt7\\_sender/prt7\\_sender.ino} (envía las tramas de ejemplo).
+\end{itemize}
+
+\subsubsection*{Compilación en Windows (MinGW)}
+\begin{verbatim}
+mkdir build
+cd build
+cmake .. -G "MinGW Makefiles"
+mingw32-make
+\end{verbatim}
+El ejecutable queda como \texttt{prt7.exe} en la carpeta \texttt{build}.
+
+\subsubsection*{Ejecución}
+Conecta el Arduino (por ejemplo en COM3) y ejecuta:
+\begin{verbatim}
+./prt7 --com COM3 --baud 9600
+\end{verbatim}
+Para terminar y ver el mensaje final, el Arduino envía la línea \texttt{END}.
+
+\subsubsection*{Flujo de funcionamiento}
+\begin{enumerate}
+  \item Se inicializa la lista del mensaje vacía y el rotor con A--Z (\texttt{head} en 'A').
+  \item Se abre el puerto serial y se leen líneas como \texttt{L,H} o \texttt{M,2}.
+  \item Si llega \texttt{M,N}, se rota el rotor. Si llega \texttt{L,X}, se calcula el mapeo y se agrega el resultado al final del mensaje.
+  \item Al recibir \texttt{END}, se imprime el mensaje completo.
+\end{enumerate}
+
+\subsection{Componentes}
+\subsubsection*{Hardware}
+\begin{itemize}
+  \item Una placa Arduino (UNO/Nano/MEGA u otra compatible).
+  \item Cable USB para la conexión con la PC.
+\end{itemize}
+
+\subsubsection*{Software}
+\begin{itemize}
+  \item Windows 10/11.
+  \item CMake (generador ``MinGW Makefiles'').
+  \item MinGW (\texttt{mingw32-make} y \texttt{gcc}).
+  \item IDE de Arduino (para cargar el \texttt{.ino}).
+  \item Doxygen (opcional, para generar documentación en HTML).
+\end{itemize}
+
+\subsubsection*{Notas de calidad}
+\begin{itemize}
+  \item No se usan contenedores de la STL. Se manejan punteros y memoria con \texttt{new/delete}.
+  \item Los destructores liberan todos los nodos para evitar fugas de memoria.
+  \item Se ignoran tramas mal formadas y se contin\'ua con las siguientes.
+\end{itemize}
+
+\end{document}

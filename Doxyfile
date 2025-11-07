@@ -1,0 +1,11 @@
+# Doxygen configuration
+PROJECT_NAME           = "PRT7Decoder"
+OUTPUT_DIRECTORY       = docs
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_ALL            = YES
+INPUT                  = include src
+RECURSIVE              = NO
+FILE_PATTERNS          = *.h *.cpp
+QUIET                  = YES
